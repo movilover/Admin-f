@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>ShortWave — Admin Panel</title>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800;900&amp;display=swap" rel="stylesheet"/>
+<script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-storage-compat.js"></script>
+<style>
+  :root{
+    --bg:#050505; --card:#111; --border:#222; --text:#fff; --muted:#999;
+    --primary:#ff0000; --green:#16c78e; --blue:#0088cc;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:'Poppins',sans-serif;padding:20px;}
+  .wrap{max-width:760px;margin:0 auto;}
+  .top{display:flex;align-items:center;gap:12px;margin-bottom:6px;}
+  .top i{color:var(--primary);font-size:22px;}
+  h1{font-size:20px;font-weight:900;margin:0;}
+  h1 span{color:var(--primary);}
+  .sub{color:var(--muted);font-size:13px;margin-bottom:24px;}
+  .panel{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:20px;margin-bottom:20px;}
+  .panel h2{font-size:14px;font-weight:800;margin:0 0 14px;display:flex;align-items:center;gap:8px;}
+  .panel h2 i{color:var(--primary);}
+  label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px;font-weight:600;}
+  input[type=text], input[type=number], input[type=url], textarea{
+    width:100%;background:#0a0a0a;border:1px solid var(--border);border-radius:10px;
+    padding:11px 12px;color:var(--text);font-family:'Poppins',sans-serif;font-size:13px;margin-bottom:16px;outline:none;
+  }
+  input:focus, textarea:focus{border-color:var(--primary);}
+  textarea{resize:vertical;min-height:70px;}
+  .row{display:flex;gap:12px;}
+  .row > div{flex:1;}
+  .part-card{border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:14px;background:rgba(255,255,255,0.02);}
+  .part-card h3{font-size:13px;font-weight:800;margin:0 0 10px;color:var(--primary);}
+  .part-count{display:flex;gap:10px;margin-bottom:18px;}
+  .part-count button{
+    flex:1;padding:10px;border-radius:10px;border:1px solid var(--border);background:transparent;color:var(--text);
+    font-family:'Poppins',sans-serif;font-weight:700;font-size:13px;cursor:pointer;
+  }
+  .part-count button.active{background:linear-gradient(135deg,#b00000,#ff0000);border:none;}
+  .hint{font-size:11px;color:var(--muted);margin-top:-8px;margin-bottom:14px;line-height:1.6;}
+  .gallery-box{border:1px dashed var(--border);border-radius:12px;padding:14px;margin-bottom:16px;text-align:center;}
+  .gallery-box input[type=file]{margin-bottom:0;}
+  .gallery-note{font-size:11px;color:#ffb020;margin-top:8px;line-height:1.6;}
+  .preview{width:100%;max-height:220px;border-radius:10px;margin-top:10px;display:none;background:#000;}
+  .gen-btn{
+    width:100%;padding:15px;border-radius:50px;border:none;background:linear-gradient(135deg,#16c78e,#0e8f66);
+    color:#fff;font-family:'Poppins',sans-serif;font-weight:800;font-size:15px;cursor:pointer;
+    box-shadow:0 8px 20px rgba(20,180,120,0.3);
+  }
+  .gen-btn:active{transform:scale(0.98);}
+  #output{display:none;}
+  .out-actions{display:flex;gap:10px;margin-bottom:12px;}
+  .copy-btn{
+    flex:1;padding:12px;border-radius:12px;border:none;background:linear-gradient(135deg,#29a9eb,#0088cc);
+    color:#fff;font-weight:700;font-size:13px;cursor:pointer;
+  }
+  .steps{font-size:12px;color:var(--muted);line-height:2;margin-bottom:14px;background:rgba(255,255,255,0.02);border-radius:10px;padding:14px;}
+  .steps b{color:var(--text);}
+  code{background:#000;padding:2px 6px;border-radius:6px;color:#16c78e;}
+  .upload-progress-wrap{display:none;margin:10px 0 14px;}
+  .upload-progress-bar{width:100%;height:8px;background:rgba(255,255,255,0.08);border-radius:10px;overflow:hidden;}
+  .upload-progress-fill{width:0%;height:100%;background:linear-gradient(135deg,#16c78e,#0e8f66);transition:width .2s;}
+  .upload-status{font-size:11px;color:var(--muted);margin-top:6px;}
+  .upload-status.done{color:#16c78e;font-weight:700;}
+  .upload-status.err{color:#ff4d4d;font-weight:700;}
+  .fb-status{font-size:12px;padding:10px 14px;border-radius:10px;margin-bottom:20px;background:rgba(255,255,255,0.03);border:1px solid var(--border);}
+  .fb-status.ok{color:#16c78e;border-color:#16c78e33;}
+  .fb-status.err{color:#ff4d4d;border-color:#ff4d4d33;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="top"><i class="fas fa-video"></i><h1>SHORT<span>WAVE</span> — Admin Panel</h1></div>
+  <div class="sub">এখানে ফিলাপ করে কোড জেনারেট করুন, তারপর Blogger-এ পেস্ট করে Publish করুন।</div>
+  <div class="fb-status" id="fbStatus"><i class="fas fa-circle-notch fa-spin"></i> Firebase-এর সাথে সংযোগ করা হচ্ছে...</div>
+
+  <div class="panel">
+    <h2><i class="fas fa-heading"></i> ভিডিওর মূল তথ্য</h2>
+    <label>ভিডিও টাইটেল</label>
+    <input type="text" id="vTitle" placeholder="যেমন: মজার শর্ট ভিডিও - পর্ব ১"/>
+    <div class="row">
+      <div>
+        <label>ভিউজ সংখ্যা</label>
+        <input type="number" id="vViews" placeholder="যেমন: 1200"/>
+      </div>
+      <div>
+        <label>ক্যাটাগরি / লেবেল</label>
+        <input type="text" id="vLabel" placeholder="যেমন: Comedy"/>
+      </div>
+    </div>
+    <label>ছোট বর্ণনা</label>
+    <textarea id="vDesc" placeholder="ভিডিওটি নিয়ে ১-২ লাইন লিখুন..."></textarea>
+  </div>
+
+  <div class="panel">
+    <h2><i class="fas fa-image"></i> থাম্বনেইল (গ্যালারি থেকে সরাসরি আপলোড — এটা সত্যিই কাজ করে ✅)</h2>
+    <div class="gallery-box">
+      <label style="margin-bottom:10px;">গ্যালারি থেকে একটা ছবি বেছে নিন — এটা সরাসরি কোডের ভেতরে বসে যাবে, আলাদা কোনো হোস্টিং লাগবে না</label>
+      <input type="file" id="thumbFile" accept="image/*"/>
+      <img id="thumbPreview" class="preview" style="object-fit:cover;"/>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2><i class="fas fa-layer-group"></i> ভিডিও পার্ট (গ্যালারি থেকে সরাসরি আপলোড — Firebase দিয়ে ✅)</h2>
+    <div class="part-count" id="partCount">
+      <button data-n="1" class="active">১ পার্ট</button>
+      <button data-n="2">২ পার্ট</button>
+      <button data-n="3">৩ পার্ট</button>
+    </div>
+    <div id="partsContainer"></div>
+  </div>
+
+  <button class="gen-btn" id="genBtn"><i class="fas fa-wand-magic-sparkles"></i> কোড তৈরি করুন</button>
+
+  <div class="panel" id="output">
+    <h2><i class="fas fa-code"></i> রেডি কোড (Blogger-এ পেস্ট করুন)</h2>
+    <div class="out-actions">
+      <button class="copy-btn" id="copyBtn"><i class="fas fa-copy"></i> কোড কপি করুন</button>
+    </div>
+    <div class="steps">
+      <b>ব্যবহারের ধাপ:</b><br/>
+      ১. Blogger ড্যাশবোর্ড → <b>New Post</b><br/>
+      ২. উপরের টাইটেল বক্সে ভিডিওর টাইটেলটা টাইপ করুন<br/>
+      ৩. পোস্ট এডিটরের উপরে ডানপাশে থ্রি-ডট → <b>HTML view</b> সিলেক্ট করুন<br/>
+      ৪. নিচের কোডটা পুরোটা কপি করে HTML view-এর ভেতরে পেস্ট করুন<br/>
+      ৫. ডানপাশে <b>Labels</b>-এ আপনার ক্যাটাগরি লিখুন, তারপর <b>Publish</b> করুন
+    </div>
+    <textarea id="codeOutput" style="min-height:220px;font-family:monospace;font-size:11px;"></textarea>
+  </div>
+
+</div>
+
+<script>
+let partCount = 1;
+
+function renderPartFields() {
+  const c = document.getElementById('partsContainer');
+  c.innerHTML = '';
+  for (let i = 1; i <= partCount; i++) {
+    const div = document.createElement('div');
+    div.className = 'part-card';
+    div.innerHTML = `
+      <h3>Part ${i}</h3>
+      <label>গ্যালারি থেকে ভিডিও সরাসরি আপলোড করুন</label>
+      <input type="file" class="partVideoFile" accept="video/*" data-index="${i - 1}"/>
+      <div class="upload-progress-wrap">
+        <div class="upload-progress-bar"><div class="upload-progress-fill"></div></div>
+        <div class="upload-status">০%</div>
+      </div>
+      <div class="hint">আপলোড শেষ হলে নিচের লিংক-বক্সে অটোমেটিক বসে যাবে। অথবা চাইলে নিজে YouTube লিংক/iframe পেস্ট করতে পারেন।</div>
+      <label>ভিডিও লিংক (অটো আসবে / অথবা নিজে বসান)</label>
+      <input type="text" class="partEmbed" placeholder="আপলোড করলে এখানে অটো লিংক বসবে, অথবা YouTube লিংক পেস্ট করুন"/>
+      <label>ডাউনলোড লিংক (এই পার্টের জন্য, ঐচ্ছিক)</label>
+      <input type="text" class="partDownload" placeholder="Google Drive / নিজের হোস্টিং লিংক"/>
+    `;
+    c.appendChild(div);
+  }
+  attachUploadHandlers();
+}
+
+document.getElementById('partCount').addEventListener('click', function(e) {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  partCount = parseInt(btn.getAttribute('data-n'), 10);
+  this.querySelectorAll('button').forEach(b => b.classList.toggle('active', b === btn));
+  renderPartFields();
+});
+renderPartFields();
+
+// --- Firebase init ---
+const firebaseConfig = {
+  apiKey: "AIzaSyDovvedY_5GWoPUjrsDACS7qyKFD1ooj4w",
+  authDomain: "movi-86cf2.firebaseapp.com",
+  projectId: "movi-86cf2",
+  storageBucket: "movi-86cf2.firebasestorage.app",
+  messagingSenderId: "759801164529",
+  appId: "1:759801164529:web:db4b1dc16d09114bcc6f50"
+};
+firebase.initializeApp(firebaseConfig);
+const storage = firebase.storage();
+const fbStatusEl = document.getElementById('fbStatus');
+
+firebase.auth().signInAnonymously()
+  .then(function() {
+    fbStatusEl.className = 'fb-status ok';
+    fbStatusEl.innerHTML = '<i class="fas fa-circle-check"></i> Firebase সংযুক্ত — এখন সরাসরি গ্যালারি থেকে ভিডিও আপলোড করা যাবে।';
+  })
+  .catch(function(err) {
+    fbStatusEl.className = 'fb-status err';
+    fbStatusEl.innerHTML = '<i class="fas fa-triangle-exclamation"></i> Firebase সংযোগ ব্যর্থ (' + err.code + ')। Firebase Console-এ Authentication → Sign-in method → Anonymous চালু আছে কিনা, এবং Billing (Blaze প্ল্যান) যোগ করা আছে কিনা চেক করুন।';
+  });
+
+function attachUploadHandlers() {
+  document.querySelectorAll('.partVideoFile').forEach(function(input) {
+    input.addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const card = input.closest('.part-card');
+      const wrap = card.querySelector('.upload-progress-wrap');
+      const fill = card.querySelector('.upload-progress-fill');
+      const status = card.querySelector('.upload-status');
+      const embedInput = card.querySelector('.partEmbed');
+
+      wrap.style.display = 'block';
+      status.className = 'upload-status';
+      status.textContent = 'আপলোড হচ্ছে... ০%';
+      embedInput.value = '';
+      embedInput.disabled = true;
+
+      const path = 'videos/' + Date.now() + '_' + file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const ref = storage.ref().child(path);
+      const task = ref.put(file);
+
+      task.on('state_changed',
+        function(snap) {
+          const pct = Math.round((snap.bytesTransferred / snap.totalBytes) * 100);
+          fill.style.width = pct + '%';
+          status.textContent = 'আপলোড হচ্ছে... ' + pct + '%';
+        },
+        function(err) {
+          status.className = 'upload-status err';
+          status.textContent = 'আপলোড ব্যর্থ: ' + err.code;
+          embedInput.disabled = false;
+        },
+        function() {
+          task.snapshot.ref.getDownloadURL().then(function(url) {
+            embedInput.value = url;
+            embedInput.disabled = false;
+            status.className = 'upload-status done';
+            status.textContent = '✅ আপলোড সম্পন্ন — লিংক বসে গেছে';
+            fill.style.width = '100%';
+          });
+        }
+      );
+    });
+  });
+}
+
+let thumbDataUrl = '';
+document.getElementById('thumbFile').addEventListener('change', function(e) {
+  const file = e.target.files[0];
+  const preview = document.getElementById('thumbPreview');
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    thumbDataUrl = ev.target.result;
+    preview.src = thumbDataUrl;
+    preview.style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+});
+
+function youtubeToEmbed(input) {
+  input = input.trim();
+  if (input.startsWith('<iframe') || input.startsWith('<video')) return input;
+  if (/firebasestorage\.googleapis\.com|firebasestorage\.app/.test(input) || /\.(mp4|webm|mov|m4v)(\?|$)/i.test(input)) {
+    return `<video controls="controls" playsinline="playsinline" preload="metadata" src="${input}"></video>`;
+  }
+  let id = null;
+  let m = input.match(/[?&]v=([^&]+)/);
+  if (m) id = m[1];
+  if (!id) { m = input.match(/youtu\.be\/([^?&]+)/); if (m) id = m[1]; }
+  if (!id) { m = input.match(/embed\/([^?&]+)/); if (m) id = m[1]; }
+  if (id) {
+    return `<iframe src="https://www.youtube.com/embed/${id}" allowfullscreen="allowfullscreen" allow="autoplay; encrypted-media"></iframe>`;
+  }
+  return `<iframe src="${input}" allowfullscreen="allowfullscreen"></iframe>`;
+}
+
+function escapeAttr(str) {
+  return (str || '').replace(/"/g, '&quot;');
+}
+
+document.getElementById('genBtn').addEventListener('click', function() {
+  const title = document.getElementById('vTitle').value || 'শিরোনাম দেওয়া হয়নি';
+  const views = document.getElementById('vViews').value;
+  const desc = document.getElementById('vDesc').value;
+
+  const embeds = Array.from(document.querySelectorAll('.partEmbed')).map(el => el.value);
+  const downloads = Array.from(document.querySelectorAll('.partDownload')).map(el => el.value);
+
+  let partsHtml = '';
+  for (let i = 0; i < partCount; i++) {
+    const embedCode = youtubeToEmbed(embeds[i] || '');
+    partsHtml += `  <div class="sw-part-data" data-title="Part ${i + 1}" data-download="${escapeAttr(downloads[i])}">\n    ${embedCode}\n  </div>\n`;
+  }
+
+  const code =
+`<!-- ShortWave admin-generated block — do not edit titles/labels here, set those in Blogger's own Title & Labels fields -->
+<div class="sw-meta" data-views="${escapeAttr(views)}" data-thumb="${escapeAttr(thumbDataUrl)}"></div>
+${partsHtml}<p>${desc.replace(/</g, '&lt;')}</p>`;
+
+  document.getElementById('codeOutput').value = code;
+  document.getElementById('output').style.display = 'block';
+  document.getElementById('output').scrollIntoView({behavior:'smooth'});
+});
+
+document.getElementById('copyBtn').addEventListener('click', function() {
+  const ta = document.getElementById('codeOutput');
+  ta.select();
+  document.execCommand('copy');
+  this.innerHTML = '<i class="fas fa-check"></i> কপি হয়েছে!';
+  setTimeout(() => { this.innerHTML = '<i class="fas fa-copy"></i> কোড কপি করুন'; }, 1500);
+});
+</script>
+</body>
+</html>
