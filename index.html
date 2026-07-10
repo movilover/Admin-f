@@ -6,9 +6,6 @@
 <title>ShortWave — Admin Panel</title>
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800;900&amp;display=swap" rel="stylesheet"/>
-<script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-storage-compat.js"></script>
 <style>
   :root{
     --bg:#050505; --card:#111; --border:#222; --text:#fff; --muted:#999;
@@ -78,7 +75,7 @@
 
   <div class="top"><i class="fas fa-video"></i><h1>SHORT<span>WAVE</span> — Admin Panel</h1></div>
   <div class="sub">এখানে ফিলাপ করে কোড জেনারেট করুন, তারপর Blogger-এ পেস্ট করে Publish করুন।</div>
-  <div class="fb-status" id="fbStatus"><i class="fas fa-circle-notch fa-spin"></i> Firebase-এর সাথে সংযোগ করা হচ্ছে...</div>
+  <div class="fb-status ok" id="fbStatus"><i class="fas fa-circle-check"></i> Cloudinary সংযুক্ত — এখন সরাসরি গ্যালারি থেকে ভিডিও ও থাম্বনেইল আপলোড করা যাবে।</div>
 
   <div class="panel">
     <h2><i class="fas fa-heading"></i> ভিডিওর মূল তথ্য</h2>
@@ -99,16 +96,20 @@
   </div>
 
   <div class="panel">
-    <h2><i class="fas fa-image"></i> থাম্বনেইল (গ্যালারি থেকে সরাসরি আপলোড — এটা সত্যিই কাজ করে ✅)</h2>
+    <h2><i class="fas fa-image"></i> থাম্বনেইল (গ্যালারি থেকে সরাসরি আপলোড — Cloudinary দিয়ে ✅)</h2>
     <div class="gallery-box">
-      <label style="margin-bottom:10px;">গ্যালারি থেকে একটা ছবি বেছে নিন — এটা সরাসরি কোডের ভেতরে বসে যাবে, আলাদা কোনো হোস্টিং লাগবে না</label>
+      <label style="margin-bottom:10px;">গ্যালারি থেকে একটা ছবি বেছে নিন — আপলোড হয়ে সাথে সাথে লিংক জেনারেট হবে</label>
       <input type="file" id="thumbFile" accept="image/*"/>
+      <div class="upload-progress-wrap" id="thumbProgressWrap">
+        <div class="upload-progress-bar"><div class="upload-progress-fill" id="thumbProgressFill"></div></div>
+        <div class="upload-status" id="thumbStatus">০%</div>
+      </div>
       <img id="thumbPreview" class="preview" style="object-fit:cover;"/>
     </div>
   </div>
 
   <div class="panel">
-    <h2><i class="fas fa-layer-group"></i> ভিডিও পার্ট (গ্যালারি থেকে সরাসরি আপলোড — Firebase দিয়ে ✅)</h2>
+    <h2><i class="fas fa-layer-group"></i> ভিডিও পার্ট (গ্যালারি থেকে সরাসরি আপলোড — Cloudinary দিয়ে ✅)</h2>
     <div class="part-count" id="partCount">
       <button data-n="1" class="active">১ পার্ট</button>
       <button data-n="2">২ পার্ট</button>
@@ -174,28 +175,42 @@ document.getElementById('partCount').addEventListener('click', function(e) {
 });
 renderPartFields();
 
-// --- Firebase init ---
-const firebaseConfig = {
-  apiKey: "AIzaSyDovvedY_5GWoPUjrsDACS7qyKFD1ooj4w",
-  authDomain: "movi-86cf2.firebaseapp.com",
-  projectId: "movi-86cf2",
-  storageBucket: "movi-86cf2.firebasestorage.app",
-  messagingSenderId: "759801164529",
-  appId: "1:759801164529:web:db4b1dc16d09114bcc6f50"
-};
-firebase.initializeApp(firebaseConfig);
-const storage = firebase.storage();
-const fbStatusEl = document.getElementById('fbStatus');
+// --- Cloudinary config ---
+const CLOUD_NAME = 'zopbouaf';
+const UPLOAD_PRESET = 'ml_default';
 
-firebase.auth().signInAnonymously()
-  .then(function() {
-    fbStatusEl.className = 'fb-status ok';
-    fbStatusEl.innerHTML = '<i class="fas fa-circle-check"></i> Firebase সংযুক্ত — এখন সরাসরি গ্যালারি থেকে ভিডিও আপলোড করা যাবে।';
-  })
-  .catch(function(err) {
-    fbStatusEl.className = 'fb-status err';
-    fbStatusEl.innerHTML = '<i class="fas fa-triangle-exclamation"></i> Firebase সংযোগ ব্যর্থ (' + err.code + ')। Firebase Console-এ Authentication → Sign-in method → Anonymous চালু আছে কিনা, এবং Billing (Blaze প্ল্যান) যোগ করা আছে কিনা চেক করুন।';
-  });
+function cloudinaryUpload(file, resourceType, onProgress, onDone, onError) {
+  const url = 'https://api.cloudinary.com/v1_1/' + CLOUD_NAME + '/' + resourceType + '/upload';
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('upload_preset', UPLOAD_PRESET);
+
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', url, true);
+
+  xhr.upload.onprogress = function(e) {
+    if (e.lengthComputable) {
+      const pct = Math.round((e.loaded / e.total) * 100);
+      onProgress(pct);
+    }
+  };
+
+  xhr.onload = function() {
+    try {
+      const res = JSON.parse(xhr.responseText);
+      if (xhr.status >= 200 && xhr.status < 300 && res.secure_url) {
+        onDone(res.secure_url);
+      } else {
+        onError((res.error && res.error.message) || ('HTTP ' + xhr.status));
+      }
+    } catch (e) {
+      onError('রেসপন্স পার্স করা যায়নি');
+    }
+  };
+
+  xhr.onerror = function() { onError('নেটওয়ার্ক এরর'); };
+  xhr.send(formData);
+}
 
 function attachUploadHandlers() {
   document.querySelectorAll('.partVideoFile').forEach(function(input) {
@@ -214,48 +229,62 @@ function attachUploadHandlers() {
       embedInput.value = '';
       embedInput.disabled = true;
 
-      const path = 'videos/' + Date.now() + '_' + file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-      const ref = storage.ref().child(path);
-      const task = ref.put(file);
-
-      task.on('state_changed',
-        function(snap) {
-          const pct = Math.round((snap.bytesTransferred / snap.totalBytes) * 100);
+      cloudinaryUpload(file, 'video',
+        function(pct) {
           fill.style.width = pct + '%';
           status.textContent = 'আপলোড হচ্ছে... ' + pct + '%';
         },
+        function(url) {
+          embedInput.value = url;
+          embedInput.disabled = false;
+          status.className = 'upload-status done';
+          status.textContent = '✅ আপলোড সম্পন্ন — লিংক বসে গেছে';
+          fill.style.width = '100%';
+        },
         function(err) {
           status.className = 'upload-status err';
-          status.textContent = 'আপলোড ব্যর্থ: ' + err.code;
+          status.textContent = 'আপলোড ব্যর্থ: ' + err;
           embedInput.disabled = false;
-        },
-        function() {
-          task.snapshot.ref.getDownloadURL().then(function(url) {
-            embedInput.value = url;
-            embedInput.disabled = false;
-            status.className = 'upload-status done';
-            status.textContent = '✅ আপলোড সম্পন্ন — লিংক বসে গেছে';
-            fill.style.width = '100%';
-          });
         }
       );
     });
   });
 }
 
-let thumbDataUrl = '';
+let thumbUrl = '';
 document.getElementById('thumbFile').addEventListener('change', function(e) {
   const file = e.target.files[0];
-  const preview = document.getElementById('thumbPreview');
   if (!file) return;
-  const reader = new FileReader();
-  reader.onload = function(ev) {
-    thumbDataUrl = ev.target.result;
-    preview.src = thumbDataUrl;
-    preview.style.display = 'block';
-  };
-  reader.readAsDataURL(file);
+  const preview = document.getElementById('thumbPreview');
+  const wrap = document.getElementById('thumbProgressWrap');
+  const fill = document.getElementById('thumbProgressFill');
+  const status = document.getElementById('thumbStatus');
+
+  wrap.style.display = 'block';
+  status.className = 'upload-status';
+  status.textContent = 'আপলোড হচ্ছে... ০%';
+  thumbUrl = '';
+
+  cloudinaryUpload(file, 'image',
+    function(pct) {
+      fill.style.width = pct + '%';
+      status.textContent = 'আপলোড হচ্ছে... ' + pct + '%';
+    },
+    function(url) {
+      thumbUrl = url;
+      preview.src = url;
+      preview.style.display = 'block';
+      status.className = 'upload-status done';
+      status.textContent = '✅ আপলোড সম্পন্ন — লিংক বসে গেছে';
+      fill.style.width = '100%';
+    },
+    function(err) {
+      status.className = 'upload-status err';
+      status.textContent = 'আপলোড ব্যর্থ: ' + err;
+    }
+  );
 });
+
 
 function youtubeToEmbed(input) {
   input = input.trim();
@@ -294,7 +323,7 @@ document.getElementById('genBtn').addEventListener('click', function() {
 
   const code =
 `<!-- ShortWave admin-generated block — do not edit titles/labels here, set those in Blogger's own Title & Labels fields -->
-<div class="sw-meta" data-views="${escapeAttr(views)}" data-thumb="${escapeAttr(thumbDataUrl)}"></div>
+<div class="sw-meta" data-views="${escapeAttr(views)}" data-thumb="${escapeAttr(thumbUrl)}"></div>
 ${partsHtml}<p>${desc.replace(/</g, '&lt;')}</p>`;
 
   document.getElementById('codeOutput').value = code;
