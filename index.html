@@ -68,6 +68,16 @@
   .fb-status{font-size:12px;padding:10px 14px;border-radius:10px;margin-bottom:20px;background:rgba(255,255,255,0.03);border:1px solid var(--border);}
   .fb-status.ok{color:#16c78e;border-color:#16c78e33;}
   .fb-status.err{color:#ff4d4d;border-color:#ff4d4d33;}
+  .hist-card{display:flex;gap:12px;align-items:center;border:1px solid var(--border);border-radius:14px;padding:10px;margin-bottom:10px;background:rgba(255,255,255,0.02);}
+  .hist-thumb{width:70px;height:70px;border-radius:10px;object-fit:cover;background:#000;flex-shrink:0;}
+  .hist-thumb.placeholder{display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:20px;}
+  .hist-info{flex:1;min-width:0;}
+  .hist-title{font-weight:700;font-size:13px;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .hist-meta{font-size:11px;color:var(--muted);}
+  .hist-actions{display:flex;gap:6px;flex-shrink:0;}
+  .hist-btn{width:34px;height:34px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text);cursor:pointer;font-size:13px;}
+  .hist-btn.view{color:#29a9eb;}
+  .hist-btn.del{color:#ff4d4d;}
 </style>
 </head>
 <body>
@@ -134,6 +144,13 @@
       ৫. ডানপাশে <b>Labels</b>-এ আপনার ক্যাটাগরি লিখুন, তারপর <b>Publish</b> করুন
     </div>
     <textarea id="codeOutput" style="min-height:220px;font-family:monospace;font-size:11px;"></textarea>
+  </div>
+
+  <div class="panel">
+    <h2><i class="fas fa-clock-rotate-left"></i> আপলোড করা ভিডিওসমূহ</h2>
+    <div class="hint" style="margin-top:0;">এই লিস্টটা শুধু এই ব্রাউজারে সংরক্ষিত থাকে। এখান থেকে ডিলিট করলে শুধু এই ট্র্যাকিং লিস্ট থেকে সরবে — Blogger-এ আগে থেকে পাবলিশ করা পোস্ট বা Cloudinary-তে থাকা ভিডিও ফাইল এখান থেকে ডিলিট হবে না, সেগুলো নিজ নিজ জায়গা থেকে আলাদাভাবে ডিলিট করতে হবে।</div>
+    <div id="historyList"></div>
+    <div id="historyEmpty" style="color:var(--muted);font-size:13px;text-align:center;padding:20px 0;">এখনো কোনো ভিডিও তৈরি করা হয়নি।</div>
   </div>
 
 </div>
@@ -307,6 +324,74 @@ function escapeAttr(str) {
   return (str || '').replace(/"/g, '&quot;');
 }
 
+// --- Upload history (stored in this browser only) ---
+const HISTORY_KEY = 'sw-admin-history';
+
+function loadHistory() {
+  try {
+    return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveHistory(list) {
+  try {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(list));
+  } catch (e) {}
+}
+
+function renderHistory() {
+  const list = loadHistory();
+  const container = document.getElementById('historyList');
+  const empty = document.getElementById('historyEmpty');
+  container.innerHTML = '';
+
+  if (list.length === 0) {
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  list.slice().reverse().forEach(function(entry) {
+    const card = document.createElement('div');
+    card.className = 'hist-card';
+
+    const thumbHtml = entry.thumbUrl
+      ? `<img class="hist-thumb" src="${entry.thumbUrl}"/>`
+      : `<div class="hist-thumb placeholder"><i class="fas fa-video"></i></div>`;
+
+    card.innerHTML = `
+      ${thumbHtml}
+      <div class="hist-info">
+        <div class="hist-title">${entry.title}</div>
+        <div class="hist-meta">${entry.partCount} পার্ট • ${entry.date}</div>
+      </div>
+      <div class="hist-actions">
+        <button class="hist-btn view" title="কোড আবার দেখুন"><i class="fas fa-eye"></i></button>
+        <button class="hist-btn del" title="লিস্ট থেকে মুছুন"><i class="fas fa-trash"></i></button>
+      </div>
+    `;
+
+    card.querySelector('.view').addEventListener('click', function() {
+      document.getElementById('codeOutput').value = entry.code;
+      document.getElementById('output').style.display = 'block';
+      document.getElementById('output').scrollIntoView({behavior:'smooth'});
+    });
+
+    card.querySelector('.del').addEventListener('click', function() {
+      if (!confirm('এই এন্ট্রিটা ট্র্যাকিং লিস্ট থেকে মুছে ফেলবেন? (Blogger পোস্ট বা Cloudinary ফাইল এতে ডিলিট হবে না)')) return;
+      const updated = loadHistory().filter(function(e) { return e.id !== entry.id; });
+      saveHistory(updated);
+      renderHistory();
+    });
+
+    container.appendChild(card);
+  });
+}
+
+renderHistory();
+
 document.getElementById('genBtn').addEventListener('click', function() {
   const title = document.getElementById('vTitle').value || 'শিরোনাম দেওয়া হয়নি';
   const views = document.getElementById('vViews').value;
@@ -329,6 +414,18 @@ ${partsHtml}<p>${desc.replace(/</g, '&lt;')}</p>`;
   document.getElementById('codeOutput').value = code;
   document.getElementById('output').style.display = 'block';
   document.getElementById('output').scrollIntoView({behavior:'smooth'});
+
+  const history = loadHistory();
+  history.push({
+    id: Date.now() + '-' + Math.random().toString(36).slice(2),
+    title: title,
+    thumbUrl: thumbUrl,
+    partCount: partCount,
+    code: code,
+    date: new Date().toLocaleDateString('bn-BD', { day: 'numeric', month: 'short', year: 'numeric' })
+  });
+  saveHistory(history);
+  renderHistory();
 });
 
 document.getElementById('copyBtn').addEventListener('click', function() {
